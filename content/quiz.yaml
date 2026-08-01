@@ -30,9 +30,9 @@ questions:
           en: Along someone else's tracks
         scores: {tazy: 2, at: 1}
       - text:
-          ru: Ни туда ни сюда — сначала посмотрю сверху
-          kk: Ешқайсысы емес — алдымен биіктен қараймын
-          en: Neither — I'll look from above first
+          ru: Сначала посмотрю сверху
+          kk: Алдымен биіктен қараймын
+          en: First I'll look from above
         scores: {berkut: 2, irbis: 1}
 
   - id: freedom
@@ -42,24 +42,24 @@ questions:
       en: Freedom is when...
     options:
       - text:
-          ru: ...тебя ничто не держит на месте
-          kk: ...ештеңе бір орында ұстамайды
-          en: ...nothing holds you in place
+          ru: Тебя ничто не держит на месте
+          kk: Ештеңе бір орында ұстамайды
+          en: Nothing holds you in place
         scores: {at: 2, tazy: 1}
       - text:
-          ru: ...тебя никто не трогает
-          kk: ...ешкім мазаламайды
-          en: ...nobody bothers you
+          ru: Тебя никто не трогает
+          kk: Ешкім мазаламайды
+          en: Nobody bothers you
         scores: {irbis: 2, berkut: 1}
       - text:
-          ru: ...рядом свои
-          kk: ...қасыңда өз адамдарың бар
-          en: ...your people are near
+          ru: Рядом свои
+          kk: Қасыңда өз адамдарың бар
+          en: Your people are near
         scores: {tazy: 2, at: 1}
       - text:
-          ru: ...видишь дальше остальных
-          kk: ...бәрінен алысты көресің
-          en: ...you see further than the rest
+          ru: Видишь дальше остальных
+          kk: Бәрінен алысты көресің
+          en: You see further than the rest
         scores: {berkut: 2, irbis: 1}
 
   - id: company
@@ -81,12 +81,12 @@ questions:
       - text:
           ru: Дождался последнего
           kk: Ең соңғысын күттің
-          en: The last one to leave, waiting on someone
+          en: The last to leave, waiting
         scores: {tazy: 2, irbis: 1}
       - text:
           ru: Стою в стороне и всё вижу
           kk: Шетте тұрып, бәрін көріп тұрсың
-          en: Off to the side, seeing everything
+          en: Off to the side, seeing all
         scores: {berkut: 2, tazy: 1}
 
   - id: strength
@@ -103,12 +103,12 @@ questions:
       - text:
           ru: В терпении — дождусь своего
           kk: Шыдамдылықта — өзімдікін күтемін
-          en: Patience — I'll wait for my moment
+          en: Patience — I'll wait
         scores: {irbis: 2, tazy: 1}
       - text:
           ru: В верности — не бросаю своих
-          kk: Адалдықта — өзімдікін тастамаймын
-          en: Loyalty — I don't leave my people
+          kk: Адалдықта — тастамаймын
+          en: Loyalty — I stay
         scores: {tazy: 2, at: 1}
       - text:
           ru: В точности — бью один раз

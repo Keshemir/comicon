@@ -64,6 +64,14 @@ async def main() -> int:
     print("\nквиз")
     failures += not check("вопросов ровно 4", len(quiz.QUESTIONS) == 4,
                           f"их {len(quiz.QUESTIONS)}")
+
+    # Telegram обрезает подпись инлайн-кнопки по ширине экрана и дорисовывает
+    # многоточие. На узком телефоне кириллица уезжает после ~36 знаков, так что
+    # держим потолок с запасом — иначе гость не дочитает вариант ответа.
+    long_opts = [f"{q['id']}/{lang} {len(t)}" for q in quiz.QUESTIONS for o in q["options"]
+                 for lang, t in o["text"].items() if len(t) > 32]
+    failures += not check("варианты влезают в кнопку", not long_opts,
+                          "длиннее 32 знаков: " + ", ".join(long_opts) if long_opts else "")
     reached = set()
     for uid in range(400):
         state = quiz.Session()
