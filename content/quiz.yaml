@@ -1,0 +1,117 @@
+# Квиз: 4 вопроса → баллы тотемам → побеждает максимум.
+#
+# У каждого ответа веса по 2-3 тотемам, а не 1:1 — иначе гость просчитывает
+# результат с первого вопроса и теряется эффект «бот меня раскусил».
+# Ничья разрешается детерминированно по user_id (см. services/quiz.py),
+# чтобы повторный проход давал тот же результат.
+
+tie_break_order: [at, berkut, tazy, irbis]
+
+questions:
+  - id: road
+    text:
+      ru: Перед тобой развилка. Куда пойдёшь?
+      kk: Алдыңда айырық жол. Қайсысын таңдайсың?
+      en: The road forks ahead of you. Which way?
+    options:
+      - text:
+          ru: Туда, где не видно конца
+          kk: Соңы көрінбейтін жолмен
+          en: The one with no end in sight
+        scores: {at: 2, berkut: 1}
+      - text:
+          ru: Вверх, даже если тяжелее
+          kk: Қиын болса да, жоғары
+          en: Upward, even if it costs more
+        scores: {irbis: 2, berkut: 1}
+      - text:
+          ru: По следу того, кто прошёл раньше
+          kk: Бұрын өткеннің ізімен
+          en: Along someone else's tracks
+        scores: {tazy: 2, at: 1}
+      - text:
+          ru: Ни туда ни сюда — сначала посмотрю сверху
+          kk: Ешқайсысы емес — алдымен биіктен қараймын
+          en: Neither — I'll look from above first
+        scores: {berkut: 2, irbis: 1}
+
+  - id: freedom
+    text:
+      ru: Свобода — это когда...
+      kk: Еркіндік дегеніміз...
+      en: Freedom is when...
+    options:
+      - text:
+          ru: ...тебя ничто не держит на месте
+          kk: ...ештеңе бір орында ұстамайды
+          en: ...nothing holds you in place
+        scores: {at: 2, tazy: 1}
+      - text:
+          ru: ...тебя никто не трогает
+          kk: ...ешкім мазаламайды
+          en: ...nobody bothers you
+        scores: {irbis: 2, berkut: 1}
+      - text:
+          ru: ...рядом свои
+          kk: ...қасыңда өз адамдарың бар
+          en: ...your people are near
+        scores: {tazy: 2, at: 1}
+      - text:
+          ru: ...видишь дальше остальных
+          kk: ...бәрінен алысты көресің
+          en: ...you see further than the rest
+        scores: {berkut: 2, irbis: 1}
+
+  - id: company
+    text:
+      ru: Большая компания, шумно. Ты обычно...
+      kk: Үлкен той, шулы. Сен әдетте...
+      en: A big loud gathering. You're usually...
+    options:
+      - text:
+          ru: Тот, кто всех сорвал с места
+          kk: Бәрін орнынан қозғаған адамсың
+          en: The one who got everyone moving
+        scores: {at: 2, berkut: 1}
+      - text:
+          ru: Ушёл раньше всех, не прощаясь
+          kk: Ешкіммен қоштаспай, ерте кеттің
+          en: Gone early, without goodbyes
+        scores: {irbis: 2, at: 1}
+      - text:
+          ru: Дождался последнего
+          kk: Ең соңғысын күттің
+          en: The last one to leave, waiting on someone
+        scores: {tazy: 2, irbis: 1}
+      - text:
+          ru: Стою в стороне и всё вижу
+          kk: Шетте тұрып, бәрін көріп тұрсың
+          en: Off to the side, seeing everything
+        scores: {berkut: 2, tazy: 1}
+
+  - id: strength
+    text:
+      ru: Твоя настоящая сила в чём?
+      kk: Нағыз күшің неде?
+      en: Where does your real strength lie?
+    options:
+      - text:
+          ru: В скорости — успеваю первым
+          kk: Жылдамдықта — бірінші жетемін
+          en: Speed — I get there first
+        scores: {at: 2, berkut: 1}
+      - text:
+          ru: В терпении — дождусь своего
+          kk: Шыдамдылықта — өзімдікін күтемін
+          en: Patience — I'll wait for my moment
+        scores: {irbis: 2, tazy: 1}
+      - text:
+          ru: В верности — не бросаю своих
+          kk: Адалдықта — өзімдікін тастамаймын
+          en: Loyalty — I don't leave my people
+        scores: {tazy: 2, at: 1}
+      - text:
+          ru: В точности — бью один раз
+          kk: Дәлдікте — бір рет соғамын
+          en: Precision — I strike once
+        scores: {berkut: 2, irbis: 1}

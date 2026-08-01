@@ -1,0 +1,28 @@
+# Базовые промпты. Per-тотемные добавки живут в totems.yaml.
+#
+# УРОК ИЗ ТЕСТА: если в добавке тотема упомянуть предмет (горы, изморозь, пыль),
+# модель его ДОРИСУЕТ на фон. Фото садится в жёсткую рамку паспорта, любой
+# лишний фон её ломает. Поэтому в totems.yaml → stylize описываем ТОЛЬКО свет
+# и тон, а весь запретный список держим здесь.
+
+# Стилизация фото гостя (image-to-image, эндпоинт /v1/images/edits)
+stylize_base: >-
+  Restyle this portrait as a vintage engraving-style pencil drawing on aged
+  parchment, the kind found on an antique passport. Monochrome sepia and
+  graphite only, fine cross-hatching and stippling.
+  Keep the person's face, features and likeness clearly recognisable and
+  unchanged — same face shape, same eyes, same hairline.
+  Head and shoulders only, centered, facing the viewer.
+  CRITICAL: plain flat empty parchment background. Absolutely no landscape,
+  no mountains, no scenery, no border, no frame, no oval, no vignette,
+  no ornament, no decorative flourishes, no text, no lettering.
+
+# Иллюстрация тотема для шаблона (text-to-image, /v1/images/generations)
+illustration_base: >-
+  Vintage engraving-style pencil illustration on aged parchment.
+  Monochrome sepia and graphite only, absolutely no saturated color.
+  Fine cross-hatching and stippling, loose sketchy linework,
+  the kind of drawing found on an antique passport or banknote.
+  Plain flat cream parchment background, no border, no frame, no text,
+  no lettering, no signature, no watermark.
+  Full body, side three-quarter view, the animal fills the frame.

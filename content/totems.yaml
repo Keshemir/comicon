@@ -1,0 +1,142 @@
+# Четыре тотема. Правь тексты здесь — код их не трогает.
+#
+# Подписи полей, заголовок, цитаты и пословица берутся из самого бланка
+# (assets/source/template.png) — это родная графика макета, её не набрать
+# заново тем же шрифтом. Здесь только ЗНАЧЕНИЯ, которые меняются.
+#
+# Язык — английский, как в исходном макете.
+# Казахская латиница была написана и лежит в истории проекта; если решишь
+# вернуться к ней, учти ошибку, которую я тогда допустил: Ұ и У — РАЗНЫЕ
+# буквы, ŪLY DALA (Великая степь), а не ULY DALA (ядовитая степь).
+#
+# stylize      — добавка к промпту стилизации фото: ТОЛЬКО свет и тон.
+#                Упомянешь предмет — модель дорисует его на фон и сломает рамку.
+# illustration — промпт центральной иллюстрации.
+# track/texture — геометрия следа и фактуры, см. docs/signs-research.md.
+
+at:
+  name: {ru: Конь, kk: Ат, en: Horse}
+  emoji: "🐎"
+  passport:
+    origin: GREAT KAZAKH STEPPE
+    national_symbol: HORSE
+    element: WIND
+    territory: SARYARQA
+    language_of_land: SILENCE AND HOOFBEATS
+    status: FREE NOMAD
+    issued_by: THE STEPPE
+    validity: AS LONG AS THE WIND BLOWS
+    motto: [FREEDOM, IS THE ONLY, BORDER]
+    stamp: BORN TO ROAM
+    auth_sub: BY HOOFPRINT
+    biometric: WIND & HORSEHAIR
+  geo:
+    coords: "49.5917° N  66.9100° E"
+    elevation: "~350m"
+    wind: "NE — SW"
+    region_label: SARYARQA
+    map_spot: [0.50, 0.42]        # доля от габарита карты: Сарыарқа, центр
+  track: hoof
+  texture: hair
+  stylize: >-
+    Warm dusty sepia tone, soft diffused daylight, gentle contrast, fine grain.
+  illustration: >-
+    A wild Kazakh steppe horse galloping at full speed, mane and tail streaming
+    in the wind, hooves kicking up dust, sparse steppe grass under it, distant
+    low mountains faintly sketched behind.
+
+berkut:
+  name: {ru: Беркут, kk: Бүркіт, en: Golden Eagle}
+  emoji: "🦅"
+  passport:
+    origin: GREAT KAZAKH STEPPE
+    national_symbol: GOLDEN EAGLE
+    element: SKY
+    territory: ALTAI
+    language_of_land: WIND AND WINGBEAT
+    status: SKY HUNTER
+    issued_by: THE HIGH PLACES
+    validity: AS LONG AS THE THERMALS RISE
+    motto: [THE SKY, HAS NO, FENCES]
+    stamp: BORN TO SOAR
+    auth_sub: BY TALON PRINT
+    biometric: FEATHER & UPDRAFT
+  geo:
+    coords: "49.0850° N  86.5400° E"
+    elevation: "~2400m"
+    wind: "W — E"
+    region_label: ALTAI
+    map_spot: [0.86, 0.36]        # Алтай, восток
+  track: talon
+  texture: feather
+  stylize: >-
+    Cool crisp light, hard-edged, strong directional sun from above, higher
+    contrast than the other totems, sharp shadow under the brow.
+  illustration: >-
+    A golden eagle (berkut) in flight with wings fully spread, talons extended
+    forward, head turned in profile, hunting stance, faint sketchy mountain
+    ridge of the Altai far below.
+
+tazy:
+  name: {ru: Тазы, kk: Тазы, en: Tazy Hound}
+  emoji: "🐕"
+  passport:
+    origin: GREAT KAZAKH STEPPE
+    national_symbol: TAZY HOUND
+    element: EARTH
+    territory: BETPAQ-DALA
+    language_of_land: SCENT AND SILENCE
+    status: ONE OF SEVEN TREASURES
+    issued_by: THE OLD TRAILS
+    validity: AS LONG AS THE TRAIL HOLDS
+    motto: [LOYALTY, OUTRUNS, DISTANCE]
+    stamp: BORN TO CHASE
+    auth_sub: BY PAWPRINT
+    biometric: DUST & FEATHERING
+  geo:
+    coords: "46.0333° N  70.1167° E"
+    elevation: "~350m"
+    wind: "N — S"
+    region_label: BETPAQ-DALA
+    map_spot: [0.55, 0.62]        # Бетпақдала, юг центра
+  track: paw_claw
+  texture: fringe
+  stylize: >-
+    Dry earthy sepia leaning slightly brown, low sun raking from the side, soft
+    warm shadows, slightly faded as if the print was carried in a pocket.
+  illustration: >-
+    A Kazakh Tazy sighthound at full stretch mid-run, deep narrow chest, long
+    slender legs, feathered ears and tail, low over dry steppe grass, flat empty
+    horizon faintly sketched behind.
+
+irbis:
+  name: {ru: Снежный барс, kk: Ірбіс, en: Snow Leopard}
+  emoji: "🐆"
+  passport:
+    origin: GREAT KAZAKH STEPPE
+    national_symbol: SNOW LEOPARD
+    element: ICE
+    territory: ALATAU
+    language_of_land: SNOW AND STILLNESS
+    status: MOUNTAIN SOLITARY
+    issued_by: THE SILENT PEAKS
+    validity: AS LONG AS THE SNOW REMEMBERS
+    motto: [SOME PATHS, ARE WALKED, ALONE]
+    stamp: BORN TO CLIMB
+    auth_sub: BY SNOW TRACK
+    biometric: FROST & ROSETTE
+  geo:
+    coords: "43.1333° N  77.0833° E"
+    elevation: "~3200m"
+    wind: "S — N"
+    region_label: ALATAU
+    map_spot: [0.74, 0.74]        # Алатау, юго-восток
+  track: paw_soft
+  texture: rosette
+  stylize: >-
+    Cold pale sepia with a faint blue-grey cast, flat overcast light, muted
+    contrast, quiet and still.
+  illustration: >-
+    A snow leopard prowling across rocky ground, thick ringed tail sweeping low
+    behind it, heavy paws, alert forward gaze, faint sketchy jagged mountain
+    crags behind.

@@ -1,0 +1,36 @@
+# Юнит для systemd. Положить в /etc/systemd/system/, поправить пути и User.
+#
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now comicon-bot
+#   journalctl -u comicon-bot -f          # смотреть логи на стенде
+
+[Unit]
+Description=Steppe Passport Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=comicon
+WorkingDirectory=/opt/comicon
+ExecStart=/opt/comicon/.venv/bin/python -m bot.main
+
+# Мероприятие идёт живьём: упавший процесс должен подниматься сам и быстро.
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=comicon-bot
+
+# В .env лежат ключи — читает только владелец.
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/comicon/data
+
+[Install]
+WantedBy=multi-user.target
