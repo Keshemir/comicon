@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import pathlib
 import zlib
@@ -252,13 +253,27 @@ def bake(totem_id: str, cfg: dict) -> Image.Image:
     return canvas
 
 
+SOURCE = ROOT / "content" / "totems.yaml"
+STAMP = OUT / ".source-sha256"
+
+
+def source_hash() -> str:
+    """Отпечаток контента, из которого испечены бланки.
+
+    Сравнивать даты файлов нельзя: git не сохраняет mtime, и после клона
+    порядок произвольный — проверка ругалась бы на каждом свежем деплое.
+    """
+    return hashlib.sha256(SOURCE.read_bytes()).hexdigest()
+
+
 def main() -> None:
-    totems = yaml.safe_load((ROOT / "content" / "totems.yaml").read_text(encoding="utf-8"))
+    totems = yaml.safe_load(SOURCE.read_text(encoding="utf-8"))
     OUT.mkdir(parents=True, exist_ok=True)
     for totem_id, cfg in totems.items():
         path = OUT / f"{totem_id}.png"
         bake(totem_id, cfg).save(path, optimize=True)
         print(f"  {totem_id:8} {path.relative_to(ROOT)}  {path.stat().st_size // 1024} КБ")
+    STAMP.write_text(source_hash())
     print(f"\n{len(totems)} бланка(ов). Бот их только читает — перепекать после "
           f"правки content/totems.yaml.")
 

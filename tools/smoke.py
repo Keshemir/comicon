@@ -7,6 +7,7 @@
 """
 
 import asyncio
+import hashlib
 import io
 import pathlib
 import sys
@@ -35,18 +36,21 @@ async def main() -> int:
     print("\nконфигурация")
     gaps = config.missing()
     check("ключи на месте", not gaps, "; ".join(gaps))
-    # Главный новый способ выстрелить себе в ногу: поправить totems.yaml и
-    # забыть перепечь бланки — на стенде это заметят раньше, чем ты.
-    yaml_mtime = (config.CONTENT / "totems.yaml").stat().st_mtime
     for totem in totems:
-        blank = ROOT / "assets" / "templates" / f"{totem}.png"
-        if not blank.exists():
+        if not (ROOT / "assets" / "templates" / f"{totem}.png").exists():
             failures += not check(f"бланк {totem} — запусти tools/bake_templates.py", False)
-        elif blank.stat().st_mtime < yaml_mtime:
-            failures += not check(f"бланк {totem} старее totems.yaml", False,
-                                  "перепеки: python3 tools/bake_templates.py")
         if not (ROOT / "assets" / "generated" / f"{totem}.png").exists():
             failures += not check(f"иллюстрация {totem}", False)
+
+    # Главный способ выстрелить себе в ногу: поправить totems.yaml и забыть
+    # перепечь бланки. Сверяем отпечаток контента, а НЕ даты файлов: git не
+    # сохраняет mtime, и после клона проверка по датам врала бы на каждом
+    # свежем деплое.
+    stamp = ROOT / "assets" / "templates" / ".source-sha256"
+    want = hashlib.sha256((config.CONTENT / "totems.yaml").read_bytes()).hexdigest()
+    fresh = stamp.exists() and stamp.read_text().strip() == want
+    failures += not check("бланки испечены из текущего totems.yaml", fresh,
+                          "" if fresh else "перепеки: python3 tools/bake_templates.py")
 
     print("\nтексты")
     i18n = yaml.safe_load((config.CONTENT / "i18n.yaml").read_text(encoding="utf-8"))
