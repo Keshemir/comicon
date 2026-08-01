@@ -193,9 +193,9 @@ def stamp_silhouette(kind: str, size: int) -> Image.Image:
     """
     import pathlib
 
-    path = pathlib.Path(__file__).resolve().parents[2] / "assets" / "generated" / f"sil_{kind}.png"
+    path = pathlib.Path(__file__).resolve().parents[1] / "assets" / "generated" / f"sil_{kind}.png"
     if not path.exists():
-        return Image.new("L", (size, size), 0)
+        raise FileNotFoundError(f"нет силуэта {path} — запусти tools/gen_assets.py")
 
     mask = Image.open(path).convert("L").point(lambda v: 255 if v < 128 else 0)
     bbox = mask.getbbox()

@@ -6,8 +6,8 @@ ru:
   start: |
     Сәлем. Это <b>Паспорт Степи</b>.
 
-    Четыре вопроса — и Степь решит, кто ты: конь, беркут, тазы или снежный барс.
-    Потом пришлёшь фото и получишь свой паспорт.
+    Скажешь имя, ответишь на четыре вопроса — и Степь решит, кто ты: конь,
+    беркут, тазы или снежный барс. Потом пришлёшь фото и получишь свой паспорт.
 
     Поехали?
   begin: Начать
@@ -17,16 +17,20 @@ ru:
     Напиши имя — Степь подберёт тебе тюркское.
   name_too_long: Слишком длинно. Напиши покороче, до 30 символов.
   name_bad: Напиши имя буквами, пожалуйста.
-  ask_photo: |
+  name_set: |
     <b>{name}</b> — так тебя теперь зовут.{meaning}
 
-    Теперь пришли фото, где хорошо видно лицо. Одно, крупным планом.
+    А теперь четыре вопроса.
+  ask_photo: |
+    <b>{name}</b>, Степь тебя узнала.
+
+    Пришли фото, где хорошо видно лицо. Одно, крупным планом.
+  send_as_photo: Пришли обычным фото, а не файлом — иначе я его не вижу.
   meaning_suffix: "\n<i>{meaning}</i>"
   no_face: |
     Не вижу лица на фото.
 
     Нужен портрет: одно лицо, крупно, без маски и очков-зеркалок. Пришли ещё раз.
-  photo_too_big: Фото слишком тяжёлое. Пришли обычным фото, не файлом.
   working: Степь смотрит на тебя…
   working_ai: Рисую твой портрет углём. Это займёт полминуты.
   working_render: Печатаю паспорт…
@@ -56,8 +60,9 @@ kk:
   start: |
     Сәлем. Бұл — <b>Дала паспорты</b>.
 
-    Төрт сұрақ, сосын Дала шешеді: сен ат па, бүркіт пе, тазы ма, әлде ірбіс пе.
-    Содан кейін суретіңді жібересің де, паспортыңды аласың.
+    Атыңды айтасың, төрт сұраққа жауап бересің — сосын Дала шешеді: сен ат па,
+    бүркіт пе, тазы ма, әлде ірбіс пе. Содан кейін суретіңді жібересің де,
+    паспортыңды аласың.
 
     Бастаймыз ба?
   begin: Бастау
@@ -67,16 +72,20 @@ kk:
     Атыңды жаз — Дала саған түркі есімін таңдайды.
   name_too_long: Тым ұзын. Қысқарақ жаз, 30 таңбаға дейін.
   name_bad: Атыңды әріппен жаз.
-  ask_photo: |
+  name_set: |
     <b>{name}</b> — енді сені солай атайды.{meaning}
 
-    Енді жүзің анық көрінетін суретіңді жібер.
+    Ал енді төрт сұрақ.
+  ask_photo: |
+    <b>{name}</b>, Дала сені таныды.
+
+    Жүзің анық көрінетін суретіңді жібер. Біреу, жақыннан.
+  send_as_photo: Файл емес, кәдімгі сурет ретінде жібер — әйтпесе мен оны көрмеймін.
   meaning_suffix: "\n<i>{meaning}</i>"
   no_face: |
     Суретте жүзді көрмедім.
 
     Бір адамның жүзі анық көрінуі керек. Қайта жібер.
-  photo_too_big: Сурет тым үлкен. Файл емес, кәдімгі сурет ретінде жібер.
   working: Дала саған қарап тұр…
   working_ai: Портретіңді көмірмен саламын. Жарты минут кетеді.
   working_render: Паспортты басып жатырмын…
@@ -106,8 +115,9 @@ en:
   start: |
     Salem. This is the <b>Steppe Passport</b>.
 
-    Four questions, and the Steppe decides who you are: horse, golden eagle,
-    tazy hound or snow leopard. Then you send a photo and get your passport.
+    Tell me your name, answer four questions, and the Steppe decides who you
+    are: horse, golden eagle, tazy hound or snow leopard. Then you send a photo
+    and get your passport.
 
     Ready?
   begin: Start
@@ -117,16 +127,20 @@ en:
     Type it — the Steppe will find your Turkic one.
   name_too_long: Too long. Keep it under 30 characters.
   name_bad: Please write your name in letters.
-  ask_photo: |
+  name_set: |
     <b>{name}</b> — that's your name now.{meaning}
 
-    Now send a photo where your face is clearly visible. One face, close up.
+    Now, four questions.
+  ask_photo: |
+    <b>{name}</b>, the Steppe knows you.
+
+    Send a photo where your face is clearly visible. One face, close up.
+  send_as_photo: Send it as a regular photo, not a file — otherwise I can't see it.
   meaning_suffix: "\n<i>{meaning}</i>"
   no_face: |
     I can't find a face in that photo.
 
     I need a portrait: one face, close up, no mask or mirrored sunglasses. Try again.
-  photo_too_big: That photo is too heavy. Send it as a photo, not a file.
   working: The Steppe is looking at you…
   working_ai: Drawing your portrait in charcoal. This takes about half a minute.
   working_render: Printing your passport…

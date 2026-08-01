@@ -8,8 +8,6 @@ import pathlib
 import sys
 import time
 
-import yaml
-
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from bot.render.compose import Passport, render  # noqa: E402
 
@@ -25,17 +23,11 @@ DEMO = {
 
 
 def main() -> None:
-    totems = yaml.safe_load((ROOT / "content" / "totems.yaml").read_text(encoding="utf-8"))
     OUT.mkdir(exist_ok=True)
     started = time.time()
 
     for totem, (name, serial, code) in DEMO.items():
-        cfg = totems[totem]
-        data = Passport(
-            name=name, serial=serial, code=code, totem_id=totem,
-            passport=cfg["passport"], geo=cfg["geo"],
-            track=cfg["track"], texture=cfg["texture"],
-        )
+        data = Passport(name=name, serial=serial, code=code, totem_id=totem)
         photo = ROOT / "assets" / "generated" / f"styled_{totem}.png"
         img = render(data, photo if photo.exists() else None)
         path = OUT / f"passport_{totem}.png"

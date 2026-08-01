@@ -20,7 +20,7 @@ class Session:
 
     step: int = 0
     scores: dict[str, int] | None = None
-    photo: bytes | None = None
+    started: bool = False        # нажал «Начать»: до этого текст — не имя, а болтовня
     name: str | None = None
     lang: str = config.DEFAULT_LANG
 

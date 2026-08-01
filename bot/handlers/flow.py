@@ -1,8 +1,9 @@
-"""Основной сценарий: язык → квиз → имя → фото → паспорт."""
+"""Основной сценарий: язык → имя → квиз → фото → паспорт."""
 
 from __future__ import annotations
 
 import asyncio
+import html
 import io
 import logging
 
@@ -23,6 +24,12 @@ TOTEMS = yaml.safe_load((config.CONTENT / "totems.yaml").read_text(encoding="utf
 # Сессии живут в памяти: гость проходит квиз за минуту, переживать рестарт
 # бота этому состоянию не нужно. В БД попадает только выданный паспорт.
 SESSIONS: dict[int, quiz.Session] = {}
+
+# Кто прямо сейчас в рендере. Лимит проверяется в начале, а пишется в конце —
+# между ними ~40 секунд стилизации, и два фото подряд проскакивали оба.
+# ponytail: множество на процесс; бот один. Второй инстанс — переезжать на
+# блокировку в БД.
+BUSY: set[int] = set()
 
 
 def t(lang: str, key: str, **kw) -> str:
@@ -73,41 +80,42 @@ async def on_lang(call: types.CallbackQuery, db) -> None:
 
 @router.callback_query(F.data == "quiz:go")
 async def on_begin(call: types.CallbackQuery) -> None:
+    """Сначала имя: тюркизация идёт в Gemini, и пока гость отвечает на четыре
+    вопроса, ответ уже готов — на стенде это снимает паузу из живой очереди."""
     state = session(call.from_user.id)
-    state.step, state.scores = 0, {}
-    await _ask_question(call, state)
+    state.step, state.scores, state.name, state.started = 0, {}, None, True
+    await call.message.edit_text(t(state.lang, "ask_name"), parse_mode="HTML")
+    await call.answer()
 
 
-async def _ask_question(call: types.CallbackQuery, state: quiz.Session) -> None:
+def _question(state: quiz.Session) -> tuple[str, types.InlineKeyboardMarkup]:
     text, options = quiz.question(state.step, state.lang)
     header = f"<b>{state.step + 1}/{len(quiz.QUESTIONS)}</b>  {text}"
-    await call.message.edit_text(
-        header, parse_mode="HTML",
-        reply_markup=_kb([[(opt, f"ans:{state.step}:{i}")] for i, opt in enumerate(options)]),
-    )
-    await call.answer()
+    return header, _kb([[(opt, f"ans:{state.step}:{i}")] for i, opt in enumerate(options)])
 
 
 @router.callback_query(F.data.startswith("ans:"))
 async def on_answer(call: types.CallbackQuery) -> None:
     _, step, index = call.data.split(":")
     state = session(call.from_user.id)
-    if int(step) != state.step:          # двойной тап по старой клавиатуре
+    if int(step) != state.step or not state.name:   # двойной тап или старая клавиатура
         await call.answer()
         return
 
     state.answer(int(index))
     if state.finished:
-        await call.message.edit_text(t(state.lang, "ask_name"), parse_mode="HTML")
-        await call.answer()
+        await call.message.edit_text(
+            t(state.lang, "ask_photo", name=state.name), parse_mode="HTML")
     else:
-        await _ask_question(call, state)
+        header, kb = _question(state)
+        await call.message.edit_text(header, parse_mode="HTML", reply_markup=kb)
+    await call.answer()
 
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_name(message: types.Message, db) -> None:
     state = session(message.from_user.id)
-    if not state.finished or state.name:
+    if not state.started or state.name:
         return
 
     raw = message.text.strip()
@@ -120,25 +128,50 @@ async def on_name(message: types.Message, db) -> None:
 
     latin, meaning, _ = await names.turkify(db, raw)
     state.name = latin
-    suffix = t(state.lang, "meaning_suffix", meaning=meaning) if meaning else ""
+    # meaning пришло от модели, а сообщение уходит с parse_mode=HTML: одна
+    # угловая скобка в ответе — и Telegram не распарсит, гость не увидит ничего.
+    suffix = t(state.lang, "meaning_suffix", meaning=html.escape(meaning)) if meaning else ""
     await message.answer(
-        t(state.lang, "ask_photo", name=latin, meaning=suffix), parse_mode="HTML"
-    )
+        t(state.lang, "name_set", name=latin, meaning=suffix), parse_mode="HTML")
+
+    header, kb = _question(state)
+    await message.answer(header, parse_mode="HTML", reply_markup=kb)
+
+
+@router.message(F.document | F.video | F.animation)
+async def on_not_photo(message: types.Message) -> None:
+    """Фото, присланное файлом, в F.photo не попадает — без этого бот молчит."""
+    state = session(message.from_user.id)
+    if state.finished and state.name:
+        await message.answer(t(state.lang, "send_as_photo"))
 
 
 @router.message(F.photo)
 async def on_photo(message: types.Message, db, bot) -> None:
     user_id = message.from_user.id
     state = session(user_id)
-    if not state.finished or not state.name:
-        await message.answer(t(state.lang, "error"))
-        return
-
+    # Лимит проверяем ПЕРВЫМ: у того, кто уже получил паспорт, сессия сброшена,
+    # и по второму условию он получил бы «сломалось» вместо «паспорт уже есть».
     if await storage.issued_count(db, user_id) >= config.PASSPORT_LIMIT:
         await message.answer(t(state.lang, "limit_reached"))
         return
 
+    if not state.finished or not state.name:
+        await message.answer(t(state.lang, "error"))
+        return
+
+    if user_id in BUSY:                   # второе фото, пока первое рендерится
+        return
+    BUSY.add(user_id)
     note = await message.answer(t(state.lang, "working"))
+    try:
+        await _issue(message, note, db, bot, state, user_id)
+    finally:
+        BUSY.discard(user_id)
+
+
+async def _issue(message: types.Message, note: types.Message, db, bot,
+                 state: quiz.Session, user_id: int) -> None:
     raw = io.BytesIO()
     await bot.download(message.photo[-1], destination=raw)
     data = raw.getvalue()
@@ -152,8 +185,10 @@ async def on_photo(message: types.Message, db, bot) -> None:
     totem_id = quiz.resolve(state.scores, user_id)
     cfg = TOTEMS[totem_id]
 
-    # Стоп-кран: дневной потолок AI исчерпан — доделываем без него, но выдаём.
-    budget_left = await storage.ai_used_today(db) < config.DAILY_AI_BUDGET
+    # Два стоп-крана: ручной (/ai off) и дневной потолок. Оба не останавливают
+    # выдачу — доделываем локальной сепией, но паспорт гость получает.
+    budget_left = (await storage.get_flag(db, "ai_enabled", "on") == "on"
+                   and await storage.ai_used_today(db) < config.DAILY_AI_BUDGET)
     try:
         portrait = await asyncio.to_thread(photo.crop_to_portrait, data, face)
         if budget_left:
@@ -169,11 +204,7 @@ async def on_photo(message: types.Message, db, bot) -> None:
 
         card = await asyncio.to_thread(
             compose.render_from_bytes,
-            compose.Passport(
-                name=state.name, serial=serial, code=code, totem_id=totem_id,
-                passport=cfg["passport"], geo=cfg["geo"],
-                track=cfg["track"], texture=cfg["texture"],
-            ),
+            compose.Passport(name=state.name, serial=serial, code=code, totem_id=totem_id),
             buf.getvalue(),
         )
     except Exception:                     # noqa: BLE001 — гостю нужен ответ, не трейс

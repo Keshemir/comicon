@@ -35,10 +35,27 @@ async def main() -> int:
     print("\nконфигурация")
     gaps = config.missing()
     check("ключи на месте", not gaps, "; ".join(gaps))
-    check("бланк собран", (ROOT / "assets" / "source" / "template.png").exists())
+    # Главный новый способ выстрелить себе в ногу: поправить totems.yaml и
+    # забыть перепечь бланки — на стенде это заметят раньше, чем ты.
+    yaml_mtime = (config.CONTENT / "totems.yaml").stat().st_mtime
     for totem in totems:
+        blank = ROOT / "assets" / "templates" / f"{totem}.png"
+        if not blank.exists():
+            failures += not check(f"бланк {totem} — запусти tools/bake_templates.py", False)
+        elif blank.stat().st_mtime < yaml_mtime:
+            failures += not check(f"бланк {totem} старее totems.yaml", False,
+                                  "перепеки: python3 tools/bake_templates.py")
         if not (ROOT / "assets" / "generated" / f"{totem}.png").exists():
             failures += not check(f"иллюстрация {totem}", False)
+
+    print("\nтексты")
+    i18n = yaml.safe_load((config.CONTENT / "i18n.yaml").read_text(encoding="utf-8"))
+    # Ключей три языка × два десятка, и забытый вылезет только на стенде —
+    # в t() он молча подменится русским, а гость получит чужой язык.
+    base = set(i18n["ru"])
+    for lang, block in i18n.items():
+        gap = sorted(base - set(block))
+        failures += not check(f"ключи {lang} на месте", not gap, ", ".join(gap))
 
     print("\nквиз")
     failures += not check("вопросов ровно 4", len(quiz.QUESTIONS) == 4,
@@ -90,6 +107,9 @@ async def main() -> int:
                                   photo.sepia(portrait).size == portrait.size)
         except photo.NoFace as exc:
             failures += not check("лицо найдено", False, str(exc))
+            await db.close()
+            print(f"\nпровалов: {failures + 1}\n")
+            return 1
 
         blank = io.BytesIO()
         photo.sepia(portrait).save(blank, "PNG")
@@ -100,11 +120,8 @@ async def main() -> int:
             failures += not check("мусор отвергается", True)
 
         print("\nсборка паспорта")
-        cfg = totems["at"]
         card = compose.render_from_bytes(
-            compose.Passport(name=latin, serial=serial, code=code, totem_id="at",
-                             passport=cfg["passport"], geo=cfg["geo"],
-                             track=cfg["track"], texture=cfg["texture"]),
+            compose.Passport(name=latin, serial=serial, code=code, totem_id="at"),
             blank.getvalue(),
         )
         path = OUT / "smoke.png"

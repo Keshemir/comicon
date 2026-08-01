@@ -9,16 +9,27 @@ Description=Steppe Passport Telegram bot
 After=network-online.target
 Wants=network-online.target
 
+# Ограничитель перезапусков живёт в [Unit], а не в [Service] — в [Service]
+# systemd его молча игнорирует. Без этого пять быстрых падений подряд (не тот
+# токен, провайдер лёг на старте) — и systemd сдаётся посреди мероприятия.
+StartLimitIntervalSec=0
+
 [Service]
 Type=simple
 User=comicon
 WorkingDirectory=/opt/comicon
 ExecStart=/opt/comicon/.venv/bin/python -m bot.main
 
+# Дневной лимит AI и «сегодня» в /stats считаются по ЛОКАЛЬНОЙ дате. На
+# европейском сервере без этой строки сутки перещёлкивались бы в 04-05 утра
+# по Астане — посреди второго дня стенда.
+Environment=TZ=Asia/Almaty
+Environment=PYTHONUNBUFFERED=1
+
 # Мероприятие идёт живьём: упавший процесс должен подниматься сам и быстро.
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
+TimeoutStopSec=20
 
 StandardOutput=journal
 StandardError=journal

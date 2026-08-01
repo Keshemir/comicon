@@ -75,8 +75,24 @@ async def reset_user(db: aiosqlite.Connection, user_id: int) -> int:
 
 
 async def next_serial(db: aiosqlite.Connection) -> tuple[str, str]:
-    async with db.execute("SELECT COUNT(*) FROM issued") as cur:
-        n = (await cur.fetchone())[0] + 1
+    """Резервирует номер одним атомарным оператором.
+
+    Считать COUNT(*)+1 нельзя: между выдачей номера и записью проходит вся
+    стилизация (~40 c), и при STYLIZE_CONCURRENCY > 1 второй гость успевал
+    посчитать то же самое и уйти с ЧУЖИМ номером на паспорте.
+
+    Счётчик отдельный, а не rowid: номер нужен ДО того, как строка появится.
+    Первый вызов на уже работающей базе подхватывает текущее число выдач.
+    Упавший рендер сжигает номер — дырка в нумерации лучше дубля.
+    """
+    async with db.execute(
+        "INSERT INTO settings (key, value) VALUES"
+        " ('serial_seq', (SELECT COUNT(*) + 1 FROM issued))"
+        " ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1"
+        " RETURNING CAST(value AS INTEGER)"
+    ) as cur:
+        n = (await cur.fetchone())[0]
+    await db.commit()
     return f"{122024 + n:09d}", f"{n:04d}"
 
 
