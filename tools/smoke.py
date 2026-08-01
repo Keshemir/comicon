@@ -95,6 +95,39 @@ async def main() -> int:
     serial, code = await storage.next_serial(db)
     failures += not check("серийный номер выдаётся", bool(serial and code), f"{serial} / {code}")
 
+    print("\nреакция на гостя")
+    # Каждое сообщение гостя должно получить ответ. Молчащий бот на стенде
+    # читается как сломанный, а человек уходит, не нажав ни одной кнопки.
+    from bot.handlers import flow                                 # noqa: PLC0415
+
+    class FakeMessage:
+        def __init__(self, uid, text=None):
+            self.from_user = type("U", (), {"id": uid})()
+            self.text, self.replies = text, []
+
+        async def answer(self, text, **kw):
+            self.replies.append(text)
+
+    async def reacts(uid, state, handler, **kw):
+        flow.SESSIONS.clear()
+        if state:
+            flow.SESSIONS[uid] = state
+        msg = FakeMessage(uid, kw.pop("text", None))
+        await handler(msg, **kw)
+        return msg.replies
+
+    done = quiz.Session(started=True, name="ZHANIBEK", step=len(quiz.QUESTIONS), scores={})
+    cases = [
+        ("текст без сессии", await reacts(-11, None, flow.on_name, db=db, text="привет")),
+        ("файл без сессии", await reacts(-12, None, flow.on_not_photo)),
+        ("фото без сессии", await reacts(-13, None, flow.on_photo, db=db, bot=None)),
+        ("текст вместо фото", await reacts(-14, done, flow.on_name, db=db, text="а как?")),
+    ]
+    for label, replies in cases:
+        failures += not check(label, bool(replies),
+                              "молчит" if not replies else replies[0].splitlines()[0][:46])
+    flow.SESSIONS.clear()
+
     print("\nимена")
     latin, meaning, live = await names.turkify(db, "Johny")
     failures += not check("Johny тюркизирован", latin.isalpha() and latin.isupper(),

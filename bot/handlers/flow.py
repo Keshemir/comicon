@@ -50,14 +50,21 @@ def _kb(rows: list[list[tuple[str, str]]]) -> types.InlineKeyboardMarkup:
     ])
 
 
-@router.message(CommandStart())
-@router.message(Command("restart"))
-async def on_start(message: types.Message) -> None:
-    SESSIONS.pop(message.from_user.id, None)
+async def _ask_language(message: types.Message) -> None:
+    """Первый экран. Он же ответ на любое сообщение от гостя без сессии:
+    на стенде люди пишут «привет» раньше, чем жмут /start, и молчание в ответ
+    читается как «бот сдох»."""
     await message.answer(
         "Тілді таңдаңыз / Выбери язык / Choose a language",
         reply_markup=_kb([[(I18N[code]["lang_name"], f"lang:{code}")] for code in I18N]),
     )
+
+
+@router.message(CommandStart())
+@router.message(Command("restart"))
+async def on_start(message: types.Message) -> None:
+    SESSIONS.pop(message.from_user.id, None)
+    await _ask_language(message)
 
 
 @router.callback_query(F.data.startswith("lang:"))
@@ -115,7 +122,13 @@ async def on_answer(call: types.CallbackQuery) -> None:
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_name(message: types.Message, db) -> None:
     state = session(message.from_user.id)
-    if not state.started or state.name:
+    if not state.started:
+        await _ask_language(message)
+        return
+    if state.name:
+        if state.finished:                # ждём фото, а прислали текст — напомним
+            await message.answer(
+                t(state.lang, "ask_photo", name=state.name), parse_mode="HTML")
         return
 
     raw = message.text.strip()
@@ -142,7 +155,9 @@ async def on_name(message: types.Message, db) -> None:
 async def on_not_photo(message: types.Message) -> None:
     """Фото, присланное файлом, в F.photo не попадает — без этого бот молчит."""
     state = session(message.from_user.id)
-    if state.finished and state.name:
+    if not state.started:
+        await _ask_language(message)
+    elif state.finished and state.name:
         await message.answer(t(state.lang, "send_as_photo"))
 
 
@@ -156,6 +171,9 @@ async def on_photo(message: types.Message, db, bot) -> None:
         await message.answer(t(state.lang, "limit_reached"))
         return
 
+    if not state.started:                 # фото прилетело раньше, чем гость начал
+        await _ask_language(message)
+        return
     if not state.finished or not state.name:
         await message.answer(t(state.lang, "error"))
         return
