@@ -286,10 +286,15 @@ async def _issue(message: types.Message, note: types.Message, db, bot,
 
     # Дальше — фоном. Гость своё уже получил: что бы тут ни упало, на его
     # выдачу это не влияет.
-    if config.ADMIN_COPY and config.ADMIN_IDS:
-        _spawn(_admin_copy(bot, out.getvalue(), state.name, serial, totem_id, user_id))
-    if state.foreign and spread.enabled() and budget_left:
+    #
+    # Зарубежному гостю админам уходит печатный 3:4 — ради него всё и затевалось.
+    # Копия 16:9 в этом случае не нужна: гость её уже получил, а админу нужен
+    # файл, с которого печатают. Для остальных 16:9 — единственное, что есть.
+    printing = bool(state.foreign) and spread.enabled() and budget_left
+    if printing:
         _spawn(_print_branch(bot, out.getvalue(), state.name, serial, totem_id, cfg))
+    elif config.ADMIN_COPY and config.ADMIN_IDS:
+        _spawn(_admin_copy(bot, out.getvalue(), state.name, serial, totem_id, user_id))
 
     SESSIONS.pop(user_id, None)           # фото и состояние больше не нужны
 
@@ -300,29 +305,45 @@ def _spawn(coro) -> None:
     task.add_done_callback(_TASKS.discard)
 
 
+def _print_targets() -> list[int]:
+    """Кому уходит печатный файл: всем админам, плюс отдельный адрес, если задан.
+
+    PRINT_USER_CHAT_ID больше не обязателен — он нужен, только если печать
+    складывают в отдельный канал, а не в личку операторам.
+    """
+    targets = list(config.ADMIN_IDS)
+    if config.PRINT_CHAT_ID and config.PRINT_CHAT_ID not in targets:
+        targets.append(config.PRINT_CHAT_ID)
+    return targets
+
+
+async def _send_document(bot, targets, data: bytes, filename: str,
+                         caption: str, what: str) -> None:
+    """Один файл нескольким адресатам, каждый в своём try.
+
+    Документом, а не фото: sendPhoto пережимает файл в JPEG и уносит с собой
+    и 300 DPI, и половину деталей карандашного штриха.
+
+    Один адресат не нажал /start у бота — остальные всё равно получат.
+    """
+    for chat_id in targets:
+        try:
+            await bot.send_document(
+                chat_id, types.BufferedInputFile(data, filename=filename),
+                caption=caption, parse_mode="HTML",
+            )
+        except Exception:                 # noqa: BLE001 — адресат мог не начать диалог
+            log.warning("%s не ушёл в %s", what, chat_id, exc_info=True)
+
+
 async def _admin_copy(bot, card: bytes, name: str, serial: str,
                       totem_id: str, user_id: int) -> None:
-    """Тот же паспорт — каждому админу в личку.
-
-    Документом, а не фото: у гостя копия и так пережата телеграмом, а у
-    оператора должен остаться исходный PNG — по нему перепечатывают.
-
-    Каждый админ отправляется отдельно и в своём try: один не нажал /start у
-    бота — остальные всё равно получат.
-    """
+    """Паспорт 16:9 админам — для гостей, которым печатный лист не делается."""
     caption = (f"📄 <b>{name}</b> · {I18N['ru']['totems'][totem_id]}\n"
                f"Серия: <code>{serial}</code>\n"
                f"Гость: <code>{user_id}</code>")
-    for admin_id in config.ADMIN_IDS:
-        try:
-            await bot.send_document(
-                admin_id,
-                types.BufferedInputFile(card, filename=f"steppe_{serial}.png"),
-                caption=caption, parse_mode="HTML",
-            )
-        except Exception:                 # noqa: BLE001 — админ мог не начать диалог
-            log.warning("копия паспорта %s не ушла админу %s", serial, admin_id,
-                        exc_info=True)
+    await _send_document(bot, list(config.ADMIN_IDS), card,
+                         f"steppe_{serial}.png", caption, f"копия паспорта {serial}")
 
 
 def _sheet_png(img, size_mm) -> bytes:
@@ -351,19 +372,18 @@ async def _print_branch(bot, card: bytes, name: str, serial: str,
     for size_mm, bleed in sizes:
         try:
             data = await asyncio.to_thread(_sheet_png, img, size_mm)
-            caption = (
-                f"🖨 <b>{name}</b> · {totem_name}\n"
-                f"Серия: <code>{serial}</code>\n"
-                f"{size_mm[0]:g}×{size_mm[1]:g} мм"
-                f"{f' + вылет {print_sheet.BLEED_PER_SIDE_MM:g} мм' if bleed else ''}"
-                f" · {print_sheet.DPI} DPI"
-            )
-            await bot.send_document(
-                config.PRINT_CHAT_ID,
-                types.BufferedInputFile(
-                    data, filename=print_sheet.filename(serial, size_mm, bleed)),
-                caption=caption,
-                parse_mode="HTML",
-            )
         except Exception:                 # noqa: BLE001
-            log.exception("не отправился печатный лист %s (%s мм)", serial, size_mm[0])
+            log.exception("не собрался печатный лист %s (%s мм)", serial, size_mm[0])
+            continue
+
+        caption = (
+            f"🖨 <b>{name}</b> · {totem_name} · <b>под печать</b>\n"
+            f"Серия: <code>{serial}</code>\n"
+            f"{size_mm[0]:g}×{size_mm[1]:g} мм"
+            f"{f' + вылет {print_sheet.BLEED_PER_SIDE_MM:g} мм' if bleed else ''}"
+            f" · {print_sheet.DPI} DPI"
+        )
+        await _send_document(
+            bot, _print_targets(), data,
+            print_sheet.filename(serial, size_mm, bleed), caption,
+            f"печатный лист {serial}")

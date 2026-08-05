@@ -41,7 +41,13 @@ class SpreadFailed(Exception):
 
 
 def enabled() -> bool:
-    return bool(config.PRINT_ENABLED and config.PRINT_CHAT_ID and config.OPENAI_API_KEY)
+    """Есть чем генерировать и есть кому слать.
+
+    Адресат по умолчанию — админы; PRINT_USER_CHAT_ID нужен, только если
+    печать складывают в отдельный канал.
+    """
+    return bool(config.PRINT_ENABLED and config.OPENAI_API_KEY
+                and (config.ADMIN_IDS or config.PRINT_CHAT_ID))
 
 
 def mrz(value: str) -> str:

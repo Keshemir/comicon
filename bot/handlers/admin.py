@@ -105,8 +105,12 @@ async def on_printtest(message: types.Message, bot) -> None:
     """
     if not _is_admin(message):
         return
-    if not config.PRINT_CHAT_ID:
-        await message.answer("PRINT_USER_CHAT_ID пуст — печатная ветка выключена.")
+
+    from .flow import _print_targets, _send_document                  # noqa: PLC0415
+
+    targets = _print_targets()
+    if not targets:
+        await message.answer("Некому слать: ADMIN_IDS пуст и PRINT_USER_CHAT_ID не задан.")
         return
 
     try:
@@ -118,23 +122,21 @@ async def on_printtest(message: types.Message, bot) -> None:
         )
         data = await asyncio.to_thread(
             lambda: print_sheet.to_png(print_sheet.sheet(card, print_sheet.MAIN_MM)))
-        await bot.send_document(
-            config.PRINT_CHAT_ID,
-            types.BufferedInputFile(data, filename="printtest_125x176mm_300dpi.png"),
-            caption="Проверка канала печати. Это не заказ — сюда будут падать "
-                    "готовые файлы зарубежных гостей.",
-        )
     except Exception as exc:              # noqa: BLE001 — оператору нужна причина
         log.exception("printtest не прошёл")
-        await message.answer(
-            f"Не дошло: <code>{type(exc).__name__}: {exc}</code>\n\n"
-            "Проверь: бот добавлен в канал администратором, право «Публикация "
-            "сообщений» включено, PRINT_USER_CHAT_ID совпадает с id канала "
-            "(вида <code>-100…</code>).",
-            parse_mode="HTML")
+        await message.answer(f"Не собралось: <code>{type(exc).__name__}: {exc}</code>",
+                             parse_mode="HTML")
         return
-    await message.answer(f"Ушло в <code>{config.PRINT_CHAT_ID}</code>. "
-                         "Проверь канал.", parse_mode="HTML")
+
+    await _send_document(
+        bot, targets, data, "printtest_125x176mm_300dpi.png",
+        "Проверка доставки. Это не заказ — так будут приходить готовые файлы "
+        "зарубежных гостей.", "тестовый лист")
+    await message.answer(
+        "Отправлено: <code>" + "</code>, <code>".join(str(x) for x in targets)
+        + "</code>\n\nНе дошло кому-то из списка — он не нажимал /start у бота "
+          "(для лички) или бот не админ в канале (для канала).",
+        parse_mode="HTML")
 
 
 @router.message(Command("whoami"))
