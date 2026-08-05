@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from aiogram import Router, types
+import asyncio
+import logging
+
+from aiogram import F, Router, types
 from aiogram.filters import Command
 
 from .. import config, storage
+from ..render import compose, print_sheet
 
+log = logging.getLogger(__name__)
 router = Router()
 
 
@@ -55,6 +60,81 @@ async def on_ai(message: types.Message, db) -> None:
         return
     await storage.set_flag(db, "ai_enabled", parts[1])
     await message.answer(f"Стилизация: <b>{parts[1]}</b>", parse_mode="HTML")
+
+
+# Админ — в ФИЛЬТРЕ, а не в теле: сработавший хендлер обрывает цепочку, и
+# пересылка от гостя пропала бы молча, не дойдя до сценария.
+@router.message(F.forward_origin, F.from_user.id.in_(config.ADMIN_IDS))
+async def on_forward(message: types.Message) -> None:
+    """Определитель chat_id: перешли сюда пост из канала — верну его номер.
+
+    Иначе id пришлось бы узнавать через сторонние id-боты, то есть пересылать
+    им содержимое своего закрытого канала.
+    """
+    origin = message.forward_origin
+    chat = getattr(origin, "chat", None)
+    if chat is not None:                  # канал или группа
+        await message.answer(
+            f"<b>{chat.title or 'без названия'}</b>\n"
+            f"id: <code>{chat.id}</code>\n\n"
+            "Это и есть значение для <code>PRINT_USER_CHAT_ID</code> в .env.\n"
+            "После правки: <code>sudo systemctl restart comicon-bot</code>, "
+            "потом <code>/printtest</code>.",
+            parse_mode="HTML")
+        return
+
+    user = getattr(origin, "sender_user", None)
+    if user is not None:
+        await message.answer(f"Это пересылка от пользователя, id: "
+                             f"<code>{user.id}</code>. Для печати нужен id канала.",
+                             parse_mode="HTML")
+        return
+
+    await message.answer(
+        "Отправитель скрыт настройками приватности — id из такой пересылки не "
+        "виден. Перешли пост именно из канала печати.")
+
+
+@router.message(Command("printtest"))
+async def on_printtest(message: types.Message, bot) -> None:
+    """Проверка канала печати: доходит ли туда файл и хватает ли боту прав.
+
+    Картинку НЕ генерируем — собираем демо-паспорт локально и гоним через ту же
+    постобработку. Проверяется ровно проводка: id канала, права бота, отправка
+    документом. Стоит ноль, поэтому дёргать можно сколько угодно.
+    """
+    if not _is_admin(message):
+        return
+    if not config.PRINT_CHAT_ID:
+        await message.answer("PRINT_USER_CHAT_ID пуст — печатная ветка выключена.")
+        return
+
+    try:
+        card = await asyncio.to_thread(
+            compose.render,
+            compose.Passport(name="TESTBEK", serial="000000000",
+                             code="0000", totem_id="at"),
+            None,
+        )
+        data = await asyncio.to_thread(
+            lambda: print_sheet.to_png(print_sheet.sheet(card, print_sheet.MAIN_MM)))
+        await bot.send_document(
+            config.PRINT_CHAT_ID,
+            types.BufferedInputFile(data, filename="printtest_125x176mm_300dpi.png"),
+            caption="Проверка канала печати. Это не заказ — сюда будут падать "
+                    "готовые файлы зарубежных гостей.",
+        )
+    except Exception as exc:              # noqa: BLE001 — оператору нужна причина
+        log.exception("printtest не прошёл")
+        await message.answer(
+            f"Не дошло: <code>{type(exc).__name__}: {exc}</code>\n\n"
+            "Проверь: бот добавлен в канал администратором, право «Публикация "
+            "сообщений» включено, PRINT_USER_CHAT_ID совпадает с id канала "
+            "(вида <code>-100…</code>).",
+            parse_mode="HTML")
+        return
+    await message.answer(f"Ушло в <code>{config.PRINT_CHAT_ID}</code>. "
+                         "Проверь канал.", parse_mode="HTML")
 
 
 @router.message(Command("whoami"))

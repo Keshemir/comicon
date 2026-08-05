@@ -11,6 +11,12 @@ ru:
 
     Поехали?
   begin: Начать
+  ask_citizenship: |
+    Ещё одно поле в паспорте — гражданство.
+
+    Откуда ты?
+  citizen_kz: Казахстан
+  citizen_other: Другая страна
   ask_name: |
     Как тебя зовут?
 
@@ -66,6 +72,12 @@ kk:
 
     Бастаймыз ба?
   begin: Бастау
+  ask_citizenship: |
+    Паспорттағы тағы бір жол — азаматтық.
+
+    Қайдансың?
+  citizen_kz: Қазақстан
+  citizen_other: Басқа ел
   ask_name: |
     Атың кім?
 
@@ -121,6 +133,12 @@ en:
 
     Ready?
   begin: Start
+  ask_citizenship: |
+    One more field in the passport — citizenship.
+
+    Where are you from?
+  citizen_kz: Kazakhstan
+  citizen_other: Another country
   ask_name: |
     What's your name?
 

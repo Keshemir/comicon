@@ -16,8 +16,8 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from bot import config, storage                                    # noqa: E402
-from bot.render import compose                                     # noqa: E402
-from bot.services import names, photo, quiz                        # noqa: E402
+from bot.render import compose, print_sheet                        # noqa: E402
+from bot.services import names, photo, quiz, spread                # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
@@ -26,6 +26,83 @@ OUT = ROOT / "out"
 def check(label: str, ok: bool, detail: str = "") -> bool:
     print(f"  [{'OK ' if ok else 'FAIL'}] {label}{'  ' + detail if detail else ''}")
     return ok
+
+
+def _print_checks(cfg: dict, name: str, serial: str) -> bool:
+    """Геометрия печатного листа и подстановка в SPREAD-промпт. Без сети.
+
+    Числа сверяются с ТЗ: 125×176 мм при 300 DPI = 1476×2079 px, сдвиг 6 мм = 71 px.
+    """
+    import numpy as np
+    from PIL import Image
+
+    ok = True
+    ok &= check("миллиметры в пиксели", (print_sheet.px(125), print_sheet.px(176),
+                                        print_sheet.px(6)) == (1476, 2079, 71))
+
+    # Вертикальный градиент: номер строки == её яркость, поэтому по результату
+    # видно, откуда взят кроп и правда ли низ зеркальный.
+    height, width = 2336, 1744
+    grad = Image.fromarray(
+        np.tile(np.arange(height, dtype=np.uint8)[:, None, None], (1, width, 3)))
+
+    for label, size_mm, expect in (("125×176", print_sheet.MAIN_MM, (1476, 2079)),
+                                   ("129×180", print_sheet.BLEED_MM, (1524, 2126))):
+        ok &= check(f"лист {label} мм", print_sheet.sheet(grad, size_mm).size == expect)
+
+    plain = print_sheet.sheet(grad, print_sheet.MAIN_MM)
+    shift = print_sheet.px(print_sheet.SHIFT_MM)
+    unshifted = np.asarray(
+        print_sheet._crop_to_ratio(grad, 125 / 176).resize((1476, 2079), Image.LANCZOS))
+    arr = np.asarray(plain)
+    ok &= check("лист сдвинут на 6 мм вверх",
+                bool((arr[:-shift, 0, 0] == unshifted[shift:, 0, 0]).all()))
+    ok &= check("низ дозалит зеркалом собственной текстуры",
+                bool((arr[-shift:, 0, 0] == unshifted[-1:-shift - 1:-1, 0, 0]).all()))
+
+    # Провайдер может отдать и 2:3 — кроп обязан пережить любую пропорцию,
+    # не вылезая за кадр и не дополняя лист чёрным.
+    narrow = print_sheet.sheet(Image.new("RGB", (1024, 1536), (210, 190, 150)),
+                               print_sheet.MAIN_MM)
+    ok &= check("портрет 2:3 не даёт чёрных полей",
+                narrow.getextrema()[0][0] > 0, f"{narrow.size}")
+
+    png = print_sheet.to_png(plain)
+    ok &= check("в PNG проставлены 300 DPI",
+                all(round(v) == 300 for v in Image.open(io.BytesIO(png)).info["dpi"]),
+                f"{len(png) // 1024} КБ")
+
+    # PRINT_IMAGE_SIZE правится в .env, а провайдер за нарушение лимитов отдаёт
+    # 400 на КАЖДЫЙ вызов. Дешевле поймать здесь, чем на живой очереди.
+    try:
+        w, h = (int(v) for v in config.PRINT_SIZE.lower().split("x"))
+        bad = []
+        if w % 16 or h % 16:
+            bad.append("стороны не кратны 16")
+        if max(w, h) > 3840:
+            bad.append("длинная сторона > 3840")
+        if max(w, h) / min(w, h) > 3:
+            bad.append("отношение круче 3:1")
+        if not 655_360 <= w * h <= 8_294_400:
+            bad.append(f"{w * h:,} пикселей вне 0.65–8.3 Мп")
+        if h <= w:
+            bad.append("размер не портретный")
+    except ValueError:
+        bad = ["не разобрать, нужен формат ШИРИНАxВЫСОТА"]
+    ok &= check(f"PRINT_IMAGE_SIZE={config.PRINT_SIZE} проходит лимиты gpt-image-2",
+                not bad, "; ".join(bad))
+
+    ok &= check("MRZ-формат территории", spread.mrz("BETPAQ-DALA") == "BETPAQ<DALA")
+    prompt = spread.build_prompt(name, serial, cfg["passport"]["territory"],
+                                 " ".join(cfg["passport"]["motto"]))
+    ok &= check("плейсхолдеры подставлены", "{" not in prompt)
+    ok &= check("MRZ-строки на месте",
+                f"SPP<KZ<{name}<<CITIZEN<OF<THE<STEPPE" in prompt and serial in prompt)
+    # Не провал: без ключей и адресата это просто выключенная ветка, а smoke
+    # гоняют и на машине без .env — чтобы поймать опечатку в YAML.
+    check("ветка печати включена", spread.enabled(),
+          "" if spread.enabled() else "нет PRINT_USER_CHAT_ID или ключа — шаг 2 пропускается")
+    return bool(ok)
 
 
 async def main() -> int:
@@ -173,6 +250,9 @@ async def main() -> int:
         card.save(path)
         failures += not check("паспорт собран", card.size == (1920, 1086),
                               f"{path.relative_to(ROOT)}")
+
+        print("\nпечатный разворот")
+        failures += not _print_checks(totems["at"], latin, serial)
 
     await db.close()
     print(f"\n{'всё зелёное' if not failures else f'провалов: {failures}'}\n")

@@ -24,6 +24,11 @@ class Session:
     name: str | None = None
     lang: str = config.DEFAULT_LANG
 
+    # Гражданство. None — гость ещё не отвечал; печатный разворот собирается
+    # только для foreign=True. Спрашиваем прямо, потому что проверить это
+    # нечем: язык интерфейса с гражданством не связан.
+    foreign: bool | None = None
+
     def __post_init__(self) -> None:
         if self.scores is None:
             self.scores = {}

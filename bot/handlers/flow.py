@@ -12,8 +12,8 @@ from aiogram import F, Router, types
 from aiogram.filters import Command, CommandStart
 
 from .. import config, storage
-from ..render import compose
-from ..services import names, photo, quiz
+from ..render import compose, print_sheet
+from ..services import names, photo, quiz, spread
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -30,6 +30,11 @@ SESSIONS: dict[int, quiz.Session] = {}
 # ponytail: множество на процесс; бот один. Второй инстанс — переезжать на
 # блокировку в БД.
 BUSY: set[int] = set()
+
+# Копия админам и печатный разворот крутятся фоном. Ссылки держим сами:
+# asyncio хранит задачи слабой ссылкой, и без этого сборщик может убить их
+# на середине запроса.
+_TASKS: set[asyncio.Task] = set()
 
 
 def t(lang: str, key: str, **kw) -> str:
@@ -91,8 +96,22 @@ async def on_begin(call: types.CallbackQuery) -> None:
     вопроса, ответ уже готов — на стенде это снимает паузу из живой очереди."""
     state = session(call.from_user.id)
     state.step, state.scores, state.name, state.started = 0, {}, None, True
+    state.foreign = None
     await call.message.edit_text(t(state.lang, "ask_name"), parse_mode="HTML")
     await call.answer()
+
+
+def _next_prompt(state: quiz.Session) -> tuple[str, types.InlineKeyboardMarkup | None]:
+    """Что показать гостю, закончившему квиз: гражданство или просьбу о фото.
+
+    Одно место на все входы — ответ на кнопку, напоминание в ответ на текст и
+    фото, присланное раньше времени. Иначе экраны разъезжаются.
+    """
+    if state.foreign is None:
+        return (t(state.lang, "ask_citizenship"),
+                _kb([[(t(state.lang, "citizen_kz"), "cit:kz")],
+                     [(t(state.lang, "citizen_other"), "cit:other")]]))
+    return t(state.lang, "ask_photo", name=state.name), None
 
 
 def _question(state: quiz.Session) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -111,11 +130,26 @@ async def on_answer(call: types.CallbackQuery) -> None:
 
     state.answer(int(index))
     if state.finished:
-        await call.message.edit_text(
-            t(state.lang, "ask_photo", name=state.name), parse_mode="HTML")
+        # Гражданство спрашиваем как ещё одно поле документа — так экран не
+        # выглядит анкетой не по делу. От ответа зависит только печатный
+        # разворот; гость в любом случае получит свои 16:9 и ничего больше.
+        text, kb = _next_prompt(state)
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
     else:
         header, kb = _question(state)
         await call.message.edit_text(header, parse_mode="HTML", reply_markup=kb)
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("cit:"))
+async def on_citizenship(call: types.CallbackQuery) -> None:
+    state = session(call.from_user.id)
+    if not state.finished or not state.name:        # тап по старой клавиатуре
+        await call.answer()
+        return
+    state.foreign = call.data.split(":", 1)[1] == "other"
+    await call.message.edit_text(
+        t(state.lang, "ask_photo", name=state.name), parse_mode="HTML")
     await call.answer()
 
 
@@ -126,9 +160,9 @@ async def on_name(message: types.Message, db) -> None:
         await _ask_language(message)
         return
     if state.name:
-        if state.finished:                # ждём фото, а прислали текст — напомним
-            await message.answer(
-                t(state.lang, "ask_photo", name=state.name), parse_mode="HTML")
+        if state.finished:                # ждём кнопку или фото, а прислали текст
+            text, kb = _next_prompt(state)
+            await message.answer(text, parse_mode="HTML", reply_markup=kb)
         return
 
     raw = message.text.strip()
@@ -176,6 +210,10 @@ async def on_photo(message: types.Message, db, bot) -> None:
         return
     if not state.finished or not state.name:
         await message.answer(t(state.lang, "error"))
+        return
+    if state.foreign is None:             # квиз прошёл, а гражданство не выбрал
+        text, kb = _next_prompt(state)
+        await message.answer(text, parse_mode="HTML", reply_markup=kb)
         return
 
     if user_id in BUSY:                   # второе фото, пока первое рендерится
@@ -245,4 +283,87 @@ async def _issue(message: types.Message, note: types.Message, db, bot,
     )
 
     await storage.record(db, user_id, serial, totem_id, state.name, used_ai)
+
+    # Дальше — фоном. Гость своё уже получил: что бы тут ни упало, на его
+    # выдачу это не влияет.
+    if config.ADMIN_COPY and config.ADMIN_IDS:
+        _spawn(_admin_copy(bot, out.getvalue(), state.name, serial, totem_id, user_id))
+    if state.foreign and spread.enabled() and budget_left:
+        _spawn(_print_branch(bot, out.getvalue(), state.name, serial, totem_id, cfg))
+
     SESSIONS.pop(user_id, None)           # фото и состояние больше не нужны
+
+
+def _spawn(coro) -> None:
+    task = asyncio.create_task(coro)
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+
+
+async def _admin_copy(bot, card: bytes, name: str, serial: str,
+                      totem_id: str, user_id: int) -> None:
+    """Тот же паспорт — каждому админу в личку.
+
+    Документом, а не фото: у гостя копия и так пережата телеграмом, а у
+    оператора должен остаться исходный PNG — по нему перепечатывают.
+
+    Каждый админ отправляется отдельно и в своём try: один не нажал /start у
+    бота — остальные всё равно получат.
+    """
+    caption = (f"📄 <b>{name}</b> · {I18N['ru']['totems'][totem_id]}\n"
+               f"Серия: <code>{serial}</code>\n"
+               f"Гость: <code>{user_id}</code>")
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await bot.send_document(
+                admin_id,
+                types.BufferedInputFile(card, filename=f"steppe_{serial}.png"),
+                caption=caption, parse_mode="HTML",
+            )
+        except Exception:                 # noqa: BLE001 — админ мог не начать диалог
+            log.warning("копия паспорта %s не ушла админу %s", serial, admin_id,
+                        exc_info=True)
+
+
+def _sheet_png(img, size_mm) -> bytes:
+    return print_sheet.to_png(print_sheet.sheet(img, size_mm))
+
+
+async def _print_branch(bot, card: bytes, name: str, serial: str,
+                        totem_id: str, cfg: dict) -> None:
+    """Шаги 2–4: разворот через API, печатный лист, отправка оператору.
+
+    Документом, а не фото: sendPhoto пережимает файл в JPEG и уносит с собой
+    и 300 DPI, и половину деталей карандашного штриха.
+    """
+    p = cfg["passport"]
+    try:
+        img = await spread.render(card, name, serial, p["territory"], " ".join(p["motto"]))
+    except Exception:                     # noqa: BLE001 — печать не должна ронять бота
+        log.exception("разворот %s не собрался", serial)
+        return
+
+    sizes = [(print_sheet.MAIN_MM, False)]
+    if config.PRINT_BLEED:
+        sizes.append((print_sheet.BLEED_MM, True))
+
+    totem_name = I18N["ru"]["totems"][totem_id]
+    for size_mm, bleed in sizes:
+        try:
+            data = await asyncio.to_thread(_sheet_png, img, size_mm)
+            caption = (
+                f"🖨 <b>{name}</b> · {totem_name}\n"
+                f"Серия: <code>{serial}</code>\n"
+                f"{size_mm[0]:g}×{size_mm[1]:g} мм"
+                f"{f' + вылет {print_sheet.BLEED_PER_SIDE_MM:g} мм' if bleed else ''}"
+                f" · {print_sheet.DPI} DPI"
+            )
+            await bot.send_document(
+                config.PRINT_CHAT_ID,
+                types.BufferedInputFile(
+                    data, filename=print_sheet.filename(serial, size_mm, bleed)),
+                caption=caption,
+                parse_mode="HTML",
+            )
+        except Exception:                 # noqa: BLE001
+            log.exception("не отправился печатный лист %s (%s мм)", serial, size_mm[0])

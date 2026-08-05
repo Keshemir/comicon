@@ -26,3 +26,60 @@ illustration_base: >-
   Plain flat cream parchment background, no border, no frame, no text,
   no lettering, no signature, no watermark.
   Full body, side three-quarter view, the animal fills the frame.
+
+# Печатный разворот (image-to-image, /v1/images/edits — на вход идёт готовый
+# паспорт 1920×1086). Складывается вдвое по горизонтали и вкладывается в
+# паспорт-холдер: сверху документ в окошке, снизу крупное животное.
+#
+# Блок литеральный (|-), а не свёрнутый: строки MRZ обязаны остаться строками.
+#
+# Животное НЕ называется по имени — модель берёт его из входной картинки.
+# Поэтому промпт один на все четыре тотема, меняются только плейсхолдеры:
+# {NAME}, {SERIAL}, {TERRITORY_MRZ}, {MOTTO}.
+spread_base: |-
+  Transform this vintage fictional passport document into a vertical two-page
+  spread (portrait orientation) for a physical passport holder that folds
+  horizontally in the middle.
+
+  TOP HALF: the passport document kept fully intact — same text, portrait, layout,
+  colors — scaled down and centered with a generous margin of plain aged paper on
+  all four sides (a leather window frame will overlap the edges). ONE CHANGE: remove
+  the animal illustration from the document's background art, seamlessly filling
+  that area with the same steppe landscape, sky and paper texture, so the document
+  keeps only the landscape behind the text.
+
+  MIDDLE: a horizontal strip of plain aged paper across the fold line — no text,
+  no graphics.
+
+  BOTTOM HALF: the SAME animal taken from the original document's artwork — identical
+  species, pose, drawing style and direction of movement — now enlarged as the hero
+  of the bottom page, running across the Kazakh steppe. Same detailed pencil-sketch
+  style on aged sepia paper. The whole bottom composition sits HIGHER on the page:
+  the animal is placed right below the middle fold strip, and the artwork ends
+  about 1 cm earlier, leaving the lowest part of the sheet as plain aged paper
+  with only faint grass fading out. Around the animal, subtle official passport
+  elements that do not cover the animal:
+  - small letterpress caption "STEPPE PASSPORT" with the motto "{MOTTO}" beneath it
+    in tiny monospaced type, right under the fold strip;
+  - a vertical perforated serial number "{SERIAL}" along one side edge, like punched
+    holes in real passport pages;
+  - a very faint security watermark of steppe ornaments and tiny tamga symbols;
+  - thin vintage frame lines with small ornamental corner flourishes;
+  - the MRZ machine-readable strip in faded black ink, also moved about 1 cm up
+    from the bottom edge:
+    "SPP<KZ<{NAME}<<CITIZEN<OF<THE<STEPPE"
+    "{SERIAL}<KZ<{TERRITORY_MRZ}<<<<<<<<<<<<<<<"
+
+  No central emblem or seal in the bottom half. One continuous aged-paper background
+  across the whole spread. The animal appears exactly ONCE in the entire image —
+  only in the bottom half.
+
+# Контроль брака: известный глюк edit-моделей — животное остаётся и в документе,
+# и внизу. Проверяем зрением текстовой модели, ответ строго JSON.
+spread_check: >-
+  This is a two-page passport spread. The top half must show a passport document
+  WITHOUT any animal illustration in it. The bottom half must show exactly one
+  large animal. Count how many distinct animals are visible in the whole image.
+  Answer strictly as JSON: {"animals": <integer>, "in_document": <true|false>}
+  where in_document is true if an animal illustration is still present inside
+  the document in the top half.
