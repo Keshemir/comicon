@@ -292,7 +292,8 @@ async def _issue(message: types.Message, note: types.Message, db, bot,
     # файл, с которого печатают. Для остальных 16:9 — единственное, что есть.
     printing = bool(state.foreign) and spread.enabled() and budget_left
     if printing:
-        _spawn(_print_branch(bot, out.getvalue(), state.name, serial, totem_id, cfg))
+        _spawn(_print_branch(bot, out.getvalue(), state.name, serial,
+                             totem_id, user_id, cfg))
     elif config.ADMIN_COPY and config.ADMIN_IDS:
         _spawn(_admin_copy(bot, out.getvalue(), state.name, serial, totem_id, user_id))
 
@@ -336,12 +337,13 @@ async def _send_document(bot, targets, data: bytes, filename: str,
             log.warning("%s не ушёл в %s", what, chat_id, exc_info=True)
 
 
-async def _admin_copy(bot, card: bytes, name: str, serial: str,
-                      totem_id: str, user_id: int) -> None:
+async def _admin_copy(bot, card: bytes, name: str, serial: str, totem_id: str,
+                      user_id: int, note: str = "") -> None:
     """Паспорт 16:9 админам — для гостей, которым печатный лист не делается."""
     caption = (f"📄 <b>{name}</b> · {I18N['ru']['totems'][totem_id]}\n"
                f"Серия: <code>{serial}</code>\n"
-               f"Гость: <code>{user_id}</code>")
+               f"Гость: <code>{user_id}</code>"
+               + (f"\n⚠️ {note}" if note else ""))
     await _send_document(bot, list(config.ADMIN_IDS), card,
                          f"steppe_{serial}.png", caption, f"копия паспорта {serial}")
 
@@ -351,17 +353,20 @@ def _sheet_png(img, size_mm) -> bytes:
 
 
 async def _print_branch(bot, card: bytes, name: str, serial: str,
-                        totem_id: str, cfg: dict) -> None:
-    """Шаги 2–4: разворот через API, печатный лист, отправка оператору.
+                        totem_id: str, user_id: int, cfg: dict) -> None:
+    """Шаги 2–4: разворот через API, печатный лист, отправка админам.
 
-    Документом, а не фото: sendPhoto пережимает файл в JPEG и уносит с собой
-    и 300 DPI, и половину деталей карандашного штриха.
+    Разворот не собрался — шлём 16:9. Гость с этим паспортом стоит у стенда
+    прямо сейчас, и оператору лучше получить хоть что-то, чем тишину и
+    строчку в журнале, которую никто не читает во время мероприятия.
     """
     p = cfg["passport"]
     try:
         img = await spread.render(card, name, serial, p["territory"], " ".join(p["motto"]))
     except Exception:                     # noqa: BLE001 — печать не должна ронять бота
-        log.exception("разворот %s не собрался", serial)
+        log.exception("разворот %s не собрался, шлю 16:9", serial)
+        await _admin_copy(bot, card, name, serial, totem_id, user_id,
+                          note="разворот не собрался, это обычная 16:9")
         return
 
     sizes = [(print_sheet.MAIN_MM, False)]
