@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 import unicodedata
 
@@ -14,7 +16,14 @@ import httpx
 
 from .. import config, storage
 
+log = logging.getLogger(__name__)
+
 API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+# Очередь на Gemini. Минутный лимит считается по запросам в минуту, а на стенде
+# имена уходят пачками: пять человек в очереди — пять параллельных вызовов, и
+# 429 прилетает на ровном месте. Гейт растягивает пачку во времени.
+_GATE = asyncio.Semaphore(config.NAME_CONCURRENCY)
 
 SYSTEM = """Ты нарекаешь гостя вымышленным тюркским именем для сувенирного «паспорта Степи».
 
@@ -53,6 +62,63 @@ def fallback_for(source: str) -> str:
     return pool[zlib.crc32(source.strip().lower().encode()) % len(pool)]
 
 
+def _retry_after(resp: httpx.Response) -> float | None:
+    """Сколько ждать по мнению самого Gemini. Заголовок или RetryInfo в теле."""
+    header = resp.headers.get("retry-after")
+    if header and header.isdigit():
+        return float(header)
+    try:
+        for detail in resp.json()["error"].get("details", []):
+            delay = detail.get("retryDelay", "")
+            if delay.endswith("s"):
+                return float(delay[:-1])
+    except (KeyError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return None
+
+
+async def _ask(payload: dict) -> dict | None:
+    """Запрос к Gemini с ретраями. None — не сложилось, зовущий берёт запасное.
+
+    Ждать долго нельзя: гость стоит в живой очереди и смотрит на «печатаю».
+    Поэтому попыток мало и пауза короткая — вытащить минутный лимит, а не
+    пересидеть суточный.
+    """
+    async with _GATE:
+        for attempt in range(config.NAME_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=45) as client:
+                    resp = await client.post(
+                        API.format(model=config.TEXT_MODEL),
+                        json=payload,
+                        headers={"x-goog-api-key": config.GEMINI_API_KEY},
+                    )
+                if resp.status_code == 200:
+                    return json.loads(
+                        resp.json()["candidates"][0]["content"]["parts"][0]["text"])
+
+                if resp.status_code in (429, 500, 503):
+                    if attempt == config.NAME_RETRIES:
+                        log.warning("Gemini %s, попытки кончились — запасное имя. "
+                                    "Если это 429 и он не проходит, кончилась "
+                                    "суточная квота ключа", resp.status_code)
+                        return None
+                    pause = _retry_after(resp) or 1.5 * (attempt + 1)
+                    log.info("Gemini %s, жду %.1f с и повторяю",
+                             resp.status_code, min(pause, 6.0))
+                    await asyncio.sleep(min(pause, 6.0))    # гость ждёт, не тянем
+                    continue
+
+                log.warning("Gemini ответил %s — запасное имя", resp.status_code)
+                return None
+            except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
+                if attempt == config.NAME_RETRIES:
+                    log.warning("Gemini недоступен (%s) — запасное имя", exc)
+                    return None
+                await asyncio.sleep(1.5 * (attempt + 1))
+    return None
+
+
 async def turkify(db, source: str) -> tuple[str, str, bool]:
     """Возвращает (латиница, значение, дошли ли до модели)."""
     source = (source or "").strip()
@@ -71,20 +137,11 @@ async def turkify(db, source: str) -> tuple[str, str, bool]:
         "contents": [{"parts": [{"text": source}]}],
         "generationConfig": {"temperature": 0.85, "responseMimeType": "application/json"},
     }
-    try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                API.format(model=config.TEXT_MODEL),
-                json=payload,
-                headers={"x-goog-api-key": config.GEMINI_API_KEY},
-            )
-        if resp.status_code != 200:
-            return fallback_for(source), "", False
-        parsed = json.loads(resp.json()["candidates"][0]["content"]["parts"][0]["text"])
-        latin = _sanitize(parsed.get("latin", ""))
-        if not latin:
-            return fallback_for(source), "", False
-    except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError):
+    parsed = await _ask(payload)
+    if parsed is None:
+        return fallback_for(source), "", False
+    latin = _sanitize(parsed.get("latin", ""))
+    if not latin:
         return fallback_for(source), "", False
 
     meaning = str(parsed.get("meaning", ""))[:60]

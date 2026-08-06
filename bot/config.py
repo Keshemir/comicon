@@ -30,6 +30,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.6-flash")
 
+# Тюркизация имён. 429 у Gemini бывает минутный (RPM — проходит за секунды) и
+# суточный (RPD — до завтра). Ретраи вытаскивают первый; второй лечится только
+# платным тарифом, и тогда бот тихо уходит на запасной список имён.
+NAME_RETRIES = int(os.getenv("NAME_MAX_RETRIES", "2"))
+NAME_CONCURRENCY = int(os.getenv("NAME_CONCURRENCY", "4"))
+
 PASSPORT_LIMIT = int(os.getenv("PASSPORT_LIMIT_PER_USER", "1"))
 AI_STYLIZE = _flag("AI_STYLIZE_ENABLED", True)
 AI_RETRIES = int(os.getenv("AI_MAX_RETRIES", "3"))
