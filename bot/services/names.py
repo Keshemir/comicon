@@ -105,15 +105,25 @@ async def _ask(source: str) -> dict | None:
     Поэтому попыток мало и пауза короткая — вытащить минутный лимит, а не
     пересидеть исчерпанную квоту.
     """
-    payload = {
-        "model": config.NAME_MODEL,
-        "messages": [{"role": "system", "content": SYSTEM},
-                     {"role": "user", "content": source}],
-        "temperature": 0.85,
-        # Сервер может не знать этого поля — тогда просто игнорирует, а JSON
-        # мы всё равно вытащим из текста.
-        "response_format": {"type": "json_object"},
-    }
+    # Два варианта запроса. Первый — как принято у OpenAI. Второй — для моделей
+    # попроще: без response_format (не всякий прокси его принимает) и без роли
+    # system (Gemma её формально не знает). На 400 переключаемся на второй —
+    # иначе несовместимость выглядела бы как «имена перестали подбираться».
+    variants = [
+        {
+            "model": config.NAME_MODEL,
+            "messages": [{"role": "system", "content": SYSTEM},
+                         {"role": "user", "content": source}],
+            "temperature": 0.85,
+            "response_format": {"type": "json_object"},
+        },
+        {
+            "model": config.NAME_MODEL,
+            "messages": [{"role": "user", "content": f"{SYSTEM}\n\nИмя: {source}"}],
+            "temperature": 0.85,
+        },
+    ]
+    variant = 0
     headers = {"Authorization": f"Bearer {config.NAME_API_KEY}",
                "Content-Type": "application/json"}
 
@@ -122,7 +132,7 @@ async def _ask(source: str) -> dict | None:
             try:
                 async with httpx.AsyncClient(timeout=45) as client:
                     resp = await client.post(config.NAME_API_URL,
-                                             json=payload, headers=headers)
+                                             json=variants[variant], headers=headers)
                 if resp.status_code == 200:
                     content = resp.json()["choices"][0]["message"]["content"]
                     parsed = _extract_json(content)
@@ -141,7 +151,15 @@ async def _ask(source: str) -> dict | None:
                     await asyncio.sleep(pause)              # гость ждёт, не тянем
                     continue
 
-                # 401/403 — неверный ключ, 404 — не тот URL, 400 — не та модель.
+                # 400 — обычно модель не понимает response_format или роль
+                # system. Пробуем упрощённый вариант, прежде чем сдаваться.
+                if resp.status_code == 400 and variant == 0:
+                    log.info("имена: 400 на обычном запросе, пробую упрощённый. %.200s",
+                             resp.text)
+                    variant = 1
+                    continue
+
+                # 401/403 — неверный ключ, 404 — не тот URL.
                 log.warning("имена: провайдер ответил %s — запасное имя. %.200s",
                             resp.status_code, resp.text)
                 return None
