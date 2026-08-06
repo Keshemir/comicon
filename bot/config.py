@@ -30,9 +30,16 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.6-flash")
 
-# Тюркизация имён. 429 у Gemini бывает минутный (RPM — проходит за секунды) и
-# суточный (RPD — до завтра). Ретраи вытаскивают первый; второй лечится только
-# платным тарифом, и тогда бот тихо уходит на запасной список имён.
+# --- тюркизация имён ------------------------------------------------------
+# Эндпоинт OpenAI-совместимый (/v1/chat/completions): под этот формат ходят и
+# llm.alem.ai, и сам OpenAI, и почти все локальные серверы. Сменить провайдера
+# = поменять три переменные в .env, код трогать не надо.
+NAME_API_URL = os.getenv("NAME_API_URL", "https://llm.alem.ai/v1/chat/completions")
+NAME_API_KEY = os.getenv("NAME_API_KEY", "").strip()
+NAME_MODEL = os.getenv("NAME_MODEL", "").strip()
+
+# 429 бывает минутный (проходит за секунды) и квотный (до продления). Ретраи
+# вытаскивают первый; на втором бот уходит на запасной список имён.
 NAME_RETRIES = int(os.getenv("NAME_MAX_RETRIES", "2"))
 NAME_CONCURRENCY = int(os.getenv("NAME_CONCURRENCY", "4"))
 
@@ -94,6 +101,8 @@ def missing() -> list[str]:
         gaps.append("BOT_TOKEN — возьми у @BotFather")
     if AI_STYLIZE and not OPENAI_API_KEY:
         gaps.append("OPENAI_API_KEY — или выключи AI_STYLIZE_ENABLED")
-    if not GEMINI_API_KEY:
-        gaps.append("GEMINI_API_KEY — без него имена не тюркизируются")
+    if not NAME_API_KEY:
+        gaps.append("NAME_API_KEY — без него имена не тюркизируются")
+    if NAME_API_KEY and not NAME_MODEL:
+        gaps.append("NAME_MODEL — спроси у провайдера: curl $NAME_API_URL/../models")
     return gaps
